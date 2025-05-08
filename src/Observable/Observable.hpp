@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <functional>
 #include <mutex>
 #include <type_traits>
@@ -8,8 +7,7 @@
 #include <vector>
 
 /*
- * Thread-safe, generic observable container. Clients may subscribe to this object with a custom
- * callback, and they will be notified when this object is updated via that callback.
+ * Thread-safe, push-based observable for event-driven architectures.
  */
 template <typename T> class Observable
 {
@@ -20,7 +18,7 @@ private:
 
     mutable std::mutex mMutex;
     std::unordered_map<size_t, Callback> mObservers;
-    std::atomic<size_t> mNextId;
+    size_t mNextId;
 
 public:
 
@@ -29,18 +27,18 @@ public:
     {}
 
     /**
-     * Register a callback to be fired when this observable updates.
+     * Register a callback to be fired when this observable notifies its subscribers.
      */
     auto Subscribe(Callback&& callback) -> size_t
     {
         std::lock_guard lock(mMutex);
-        size_t id = mNextId.fetch_add(1);
+        size_t id = mNextId++;
         mObservers.emplace(id, std::move(callback));
         return id;
     }
 
     /**
-     * Register a callback to be fired when this observable updates.
+     * Register a callback to be fired when this observable notifies its subscribers.
      */
     auto Subscribe(std::function<void()>&& callback) -> size_t
     {
@@ -51,7 +49,8 @@ public:
     }
 
     /**
-     * Unregister a callback so that it will no longer be fired when this observable updates.
+     * Unregister a callback so that it will no longer be fired when this observable notifies its
+     * subscribers.
      */
     auto Unsubscribe(size_t id) -> void
     {
@@ -60,7 +59,7 @@ public:
     }
 
     /**
-     * Fire observer callbacks with a payload.
+     * Fire observer callbacks.
      */
     auto Notify(Payload const& payload) const -> void
     {
@@ -78,14 +77,14 @@ public:
 private:
 
     /**
-     * Return a copy of the current list of callbacks
+     * Return a copy of the current list of callbacks in a thread-safe manner.
      */
     auto GetSnapshot() const -> std::vector<Callback>
     {
         std::vector<Callback> snapshot;
-        snapshot.reserve(mObservers.size());
         {
             std::lock_guard lock(mMutex);
+            snapshot.reserve(mObservers.size());
             for (auto const& [id, callback] : mObservers)
             {
                 snapshot.push_back(callback);
