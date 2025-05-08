@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <Observable.hpp>
+#include <Watcher.hpp>
 
 #include <unordered_set>
 
@@ -111,4 +112,35 @@ TEST(ObservableTests, ThreadSafety)
     observable.Notify(1);
 
     EXPECT_EQ(count.load(), 10);
+}
+
+TEST(WatcherTests, Basic)
+{
+    ConcreteWatcher w;
+
+    std::mutex m;
+    std::condition_variable cv;
+    int count = 0;
+  
+    // subscribe _before_ starting the thread
+    auto sub = w.Subscribe([&](int) {
+      std::lock_guard lk(m);
+      if (++count >= 3) {
+        cv.notify_one();
+      }
+    });
+  
+    w.Start();
+  
+    // wait until we see 3 events or time out
+    {
+      std::unique_lock lk(m);
+      bool ok = cv.wait_for(lk, std::chrono::seconds(1),
+                            [&]{ return count >= 3; });
+      assert(ok && "Did not receive 3 events in time");
+    }
+  
+    w.Stop();
+
+    EXPECT_EQ(count, 3);
 }
