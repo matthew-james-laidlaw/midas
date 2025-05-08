@@ -1,0 +1,2 @@
+add_executable(testmidas ObservableTests.cpp)
+target_link_libraries(testmidas observable gtest_main)
