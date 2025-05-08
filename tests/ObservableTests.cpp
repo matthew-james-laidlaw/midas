@@ -12,29 +12,29 @@ auto IsUnique(std::vector<T> const& list) -> bool
 
 TEST(ObservableTests, MultipleNotifications)
 {
-    Observable<void> observable;
+    Observable<int> observable;
 
     int count = 0;
 
-    observable.Subscribe([&]{ ++count; });
+    observable.Subscribe([&](int){ ++count; });
 
-    observable.Notify();
-    observable.Notify();
+    observable.Notify(1);
+    observable.Notify(1);
 
     EXPECT_EQ(count, 2);
 }
 
 TEST(ObservableTests, MultipleSubscribers)
 {
-    Observable<void> observable;
+    Observable<int> observable;
 
     int countA = 0;
     int countB = 0;
 
-    observable.Subscribe([&]{ ++countA; });
-    observable.Subscribe([&]{ ++countB; });
+    observable.Subscribe([&](int){ ++countA; });
+    observable.Subscribe([&](int){ ++countB; });
 
-    observable.Notify();
+    observable.Notify(1);
 
     EXPECT_EQ(countA, 1);
     EXPECT_EQ(countB, 1);
@@ -42,17 +42,17 @@ TEST(ObservableTests, MultipleSubscribers)
 
 TEST(ObservableTests, Unsubscribe)
 {
-    Observable<void> observable;
+    Observable<int> observable;
 
     int countA = 0;
     int countB = 0;
 
-    auto a = observable.Subscribe([&]{ ++countA; });
-    auto b = observable.Subscribe([&]{ ++countB; });
+    auto a = observable.Subscribe([&](int){ ++countA; });
+    auto b = observable.Subscribe([&](int){ ++countB; });
 
     observable.Unsubscribe(b);
 
-    observable.Notify();
+    observable.Notify(1);
 
     EXPECT_EQ(countA, 1);
     EXPECT_EQ(countB, 0);
@@ -60,7 +60,7 @@ TEST(ObservableTests, Unsubscribe)
 
 TEST(ObservableTests, UniqueIdentifiers)
 {
-    Observable<void> observable;
+    Observable<int> observable;
 
     std::vector<size_t> ids;
     std::vector<std::thread> threads;
@@ -70,7 +70,7 @@ TEST(ObservableTests, UniqueIdentifiers)
     {
         threads.emplace_back(std::thread([&]
         {
-            size_t id = observable.Subscribe([&]{});
+            size_t id = observable.Subscribe([&](int){});
             std::lock_guard lock(threadsMutex);
             ids.push_back(id);
         }));
@@ -87,7 +87,7 @@ TEST(ObservableTests, UniqueIdentifiers)
 
 TEST(ObservableTests, ThreadSafety)
 {
-    Observable<void> observable;
+    Observable<int> observable;
 
     std::vector<size_t> ids;
     std::vector<std::thread> threads;
@@ -99,7 +99,7 @@ TEST(ObservableTests, ThreadSafety)
     {
         threads.emplace_back(std::thread([&]
         {
-            observable.Subscribe([&]{ count.fetch_add(1); });
+            observable.Subscribe([&](int){ count.fetch_add(1); });
         }));
     }
 
@@ -108,7 +108,7 @@ TEST(ObservableTests, ThreadSafety)
         thread.join();
     }
     
-    observable.Notify();
+    observable.Notify(1);
 
     EXPECT_EQ(count.load(), 10);
 }

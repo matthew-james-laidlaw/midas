@@ -4,6 +4,7 @@ AlignOperands: AlignAfterOperator
 AllowShortLambdasOnASingleLine: Empty
 BreakBeforeBraces: Custom
 BreakConstructorInitializers: BeforeComma
+BreakTemplateDeclarations: Yes
 BraceWrapping:
     AfterClass: true
     AfterControlStatement: true
