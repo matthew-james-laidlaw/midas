@@ -2,6 +2,8 @@
 
 #include "Observable.hpp"
 
+#include <optional>
+
 template <typename Event>
 class Watcher
 {
@@ -18,7 +20,7 @@ public:
         Stop();
     }
 
-    virtual auto WaitForEvent() -> Event = 0;
+    virtual auto WaitForEvent() -> std::optional<Event> = 0;
 
     auto Start() -> void
     {
@@ -55,56 +57,47 @@ protected:
         while (mRunning)
         {
             auto event = WaitForEvent();
-            if (!mRunning)
+            if (!mRunning || !event.has_value())
             {
                 break;
             }
-            mOnEvent.Notify(event);
+            mOnEvent.Notify(event.value());
         }
     }
 };
 
-class ConcreteWatcher : public Watcher<int>
+/**
+ * Emits N events then completes.
+ */
+class FixedCountWatcher : public Watcher<int>
 {
+private:
+
+    size_t mCount;
+    size_t mCurrent;
+    std::atomic<bool> mDone;
+
 public:
 
-    auto WaitForEvent() -> int override
+    FixedCountWatcher(size_t count)
+        : mCount(count)
+        , mCurrent(0)
+        , mDone(false)
+    {}
+
+    auto WaitForEvent() -> std::optional<int> override
     {
-        return 1;
+        if (mCurrent++ >= mCount)
+        {
+            mDone = true;
+            mDone.notify_one();
+            return std::nullopt;
+        }
+        return 0;
+    }
+
+    auto Wait() -> void
+    {
+        mDone.wait(false);
     }
 };
-
-// // test concrete watcher that emits 3 events then stops
-// class ConcreteWatcher : public Watcher<int> {
-//     public:
-//       ConcreteWatcher() : mEmitted(0) {}
-    
-//     protected:
-//       std::optional<int> WaitForEvent() override {
-//         if (mEmitted < 3) {
-//           ++mEmitted;
-//           // pace it so loop doesn’t spin too fast
-//           std::this_thread::sleep_for(std::chrono::milliseconds(10));
-//           return 1;
-//         }
-//         // signal “no more events” → loop breaks
-//         return std::nullopt;
-//       }
-    
-//     private:
-//       int mEmitted;
-//     };
-
-// // watcher.hpp  
-// protected:
-//   // return std::nullopt to break the loop
-//   virtual std::optional<Event> WaitForEvent() = 0;
-
-// private:
-//   void Main() {
-//     while (mRunning) {
-//       auto maybe = WaitForEvent();
-//       if (!mRunning || !maybe) break;
-//       mOnEvent.Notify(*maybe);
-//     }
-//   }

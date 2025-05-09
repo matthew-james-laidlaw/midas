@@ -17,7 +17,10 @@ TEST(ObservableTests, MultipleNotifications)
 
     int count = 0;
 
-    observable.Subscribe([&](int){ ++count; });
+    observable.Subscribe([&](int)
+    {
+        ++count;
+    });
 
     observable.Notify(1);
     observable.Notify(1);
@@ -32,8 +35,14 @@ TEST(ObservableTests, MultipleSubscribers)
     int countA = 0;
     int countB = 0;
 
-    observable.Subscribe([&](int){ ++countA; });
-    observable.Subscribe([&](int){ ++countB; });
+    observable.Subscribe([&](int)
+    {
+        ++countA;
+    });
+    observable.Subscribe([&](int)
+    {
+        ++countB;
+    });
 
     observable.Notify(1);
 
@@ -48,8 +57,14 @@ TEST(ObservableTests, Unsubscribe)
     int countA = 0;
     int countB = 0;
 
-    auto a = observable.Subscribe([&](int){ ++countA; });
-    auto b = observable.Subscribe([&](int){ ++countB; });
+    auto a = observable.Subscribe([&](int)
+    {
+        ++countA;
+    });
+    auto b = observable.Subscribe([&](int)
+    {
+        ++countB;
+    });
 
     observable.Unsubscribe(b);
 
@@ -71,7 +86,7 @@ TEST(ObservableTests, UniqueIdentifiers)
     {
         threads.emplace_back(std::thread([&]
         {
-            size_t id = observable.Subscribe([&](int){});
+            size_t id = observable.Subscribe([&](int) {});
             std::lock_guard lock(threadsMutex);
             ids.push_back(id);
         }));
@@ -86,7 +101,7 @@ TEST(ObservableTests, UniqueIdentifiers)
     EXPECT_TRUE(IsUnique(ids));
 }
 
-TEST(ObservableTests, ThreadSafety)
+TEST(ObservableTests, ConcurrentUse)
 {
     Observable<int> observable;
 
@@ -100,7 +115,10 @@ TEST(ObservableTests, ThreadSafety)
     {
         threads.emplace_back(std::thread([&]
         {
-            observable.Subscribe([&](int){ count.fetch_add(1); });
+            observable.Subscribe([&](int)
+            {
+                count.fetch_add(1);
+            });
         }));
     }
 
@@ -108,39 +126,90 @@ TEST(ObservableTests, ThreadSafety)
     {
         thread.join();
     }
-    
+
     observable.Notify(1);
 
     EXPECT_EQ(count.load(), 10);
 }
 
-TEST(WatcherTests, Basic)
+TEST(WatcherTests, Subscribe)
 {
-    ConcreteWatcher w;
+    FixedCountWatcher watcher(3);
 
-    std::mutex m;
-    std::condition_variable cv;
-    int count = 0;
-  
-    // subscribe _before_ starting the thread
-    auto sub = w.Subscribe([&](int) {
-      std::lock_guard lk(m);
-      if (++count >= 3) {
-        cv.notify_one();
-      }
-    });
-  
-    w.Start();
-  
-    // wait until we see 3 events or time out
+    size_t countA = 0;
+    size_t countB = 0;
+
+    watcher.Subscribe([&](int)
     {
-      std::unique_lock lk(m);
-      bool ok = cv.wait_for(lk, std::chrono::seconds(1),
-                            [&]{ return count >= 3; });
-      assert(ok && "Did not receive 3 events in time");
-    }
-  
-    w.Stop();
+        ++countA;
+    });
 
-    EXPECT_EQ(count, 3);
+    watcher.Subscribe([&](int)
+    {
+        ++countB;
+    });
+
+    watcher.Start();
+    watcher.Wait();
+
+    EXPECT_EQ(countA, 3);
+    EXPECT_EQ(countB, 3);
+}
+
+TEST(WatcherTests, Unsubscribe)
+{
+    FixedCountWatcher watcher(3);
+
+    size_t countA = 0;
+    size_t countB = 0;
+
+    auto a = watcher.Subscribe([&](int)
+    {
+        ++countA;
+    });
+
+    auto b = watcher.Subscribe([&](int)
+    {
+        ++countB;
+    });
+
+    watcher.Unsubscribe(b);
+
+    watcher.Start();
+    watcher.Wait();
+
+    EXPECT_EQ(countA, 3);
+    EXPECT_EQ(countB, 0);
+}
+
+TEST(WatcherTests, Stop)
+{
+    FixedCountWatcher watcher(1000);
+
+    size_t count = 0;
+
+    bool readyToStop = false;
+    std::mutex watcherMx;
+    std::condition_variable watcherCv;
+
+    watcher.Subscribe([&](int)
+    {
+        std::lock_guard lock(watcherMx);
+        if (++count == 5)
+        {
+            readyToStop = true;
+            watcherCv.notify_one();
+        }
+    });
+
+    watcher.Start();
+
+    {
+        std::unique_lock lock(watcherMx);
+        watcherCv.wait(lock, [&]() { return readyToStop; });
+        watcher.Stop();
+    }
+
+
+    EXPECT_EQ(count, 5);
 }
