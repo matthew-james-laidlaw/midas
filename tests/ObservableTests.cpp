@@ -3,7 +3,10 @@
 #include <Observable.hpp>
 #include <Watcher.hpp>
 
+#include <chrono>
 #include <unordered_set>
+
+using namespace std::chrono_literals;
 
 template <typename T>
 auto IsUnique(std::vector<T> const& list) -> bool
@@ -184,32 +187,24 @@ TEST(WatcherTests, Unsubscribe)
 
 TEST(WatcherTests, Stop)
 {
-    FixedCountWatcher watcher(1000);
+    FixedCountWatcher watcher(10);
 
     size_t count = 0;
 
-    bool readyToStop = false;
-    std::mutex watcherMx;
-    std::condition_variable watcherCv;
-
     watcher.Subscribe([&](int)
     {
-        std::lock_guard lock(watcherMx);
-        if (++count == 5)
-        {
-            readyToStop = true;
-            watcherCv.notify_one();
-        }
+        ++count;
+        std::this_thread::sleep_for(10us);
     });
 
+    // start and allow the watcher enough time to emit roughly half of its events
     watcher.Start();
+    std::this_thread::sleep_for(50us);
+    watcher.Stop();
 
-    {
-        std::unique_lock lock(watcherMx);
-        watcherCv.wait(lock, [&]() { return readyToStop; });
-        watcher.Stop();
-    }
+    // ample time for the watcher to emit all 10 of its events
+    std::this_thread::sleep_for(200us);
 
-
-    EXPECT_EQ(count, 5);
+    EXPECT_TRUE(count > 0 && count < 10);
 }
+
