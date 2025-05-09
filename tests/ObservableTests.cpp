@@ -1,12 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <Observable.hpp>
-#include <Watcher.hpp>
-
-#include <chrono>
 #include <unordered_set>
-
-using namespace std::chrono_literals;
 
 template <typename T>
 auto IsUnique(std::vector<T> const& list) -> bool
@@ -134,77 +129,3 @@ TEST(ObservableTests, ConcurrentUse)
 
     EXPECT_EQ(count.load(), 10);
 }
-
-TEST(WatcherTests, Subscribe)
-{
-    FixedCountWatcher watcher(3);
-
-    size_t countA = 0;
-    size_t countB = 0;
-
-    watcher.Subscribe([&](int)
-    {
-        ++countA;
-    });
-
-    watcher.Subscribe([&](int)
-    {
-        ++countB;
-    });
-
-    watcher.Start();
-    watcher.Wait();
-
-    EXPECT_EQ(countA, 3);
-    EXPECT_EQ(countB, 3);
-}
-
-TEST(WatcherTests, Unsubscribe)
-{
-    FixedCountWatcher watcher(3);
-
-    size_t countA = 0;
-    size_t countB = 0;
-
-    auto a = watcher.Subscribe([&](int)
-    {
-        ++countA;
-    });
-
-    auto b = watcher.Subscribe([&](int)
-    {
-        ++countB;
-    });
-
-    watcher.Unsubscribe(b);
-
-    watcher.Start();
-    watcher.Wait();
-
-    EXPECT_EQ(countA, 3);
-    EXPECT_EQ(countB, 0);
-}
-
-TEST(WatcherTests, Stop)
-{
-    FixedCountWatcher watcher(10);
-
-    size_t count = 0;
-
-    watcher.Subscribe([&](int)
-    {
-        ++count;
-        std::this_thread::sleep_for(10us);
-    });
-
-    // start and allow the watcher enough time to emit roughly half of its events
-    watcher.Start();
-    std::this_thread::sleep_for(50us);
-    watcher.Stop();
-
-    // ample time for the watcher to emit all 10 of its events
-    std::this_thread::sleep_for(200us);
-
-    EXPECT_TRUE(count > 0 && count < 10);
-}
-

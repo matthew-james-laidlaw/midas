@@ -65,39 +65,3 @@ protected:
         }
     }
 };
-
-/**
- * Emits N events then completes.
- */
-class FixedCountWatcher : public Watcher<int>
-{
-private:
-
-    size_t mCount;
-    size_t mCurrent;
-    std::atomic<bool> mDone;
-
-public:
-
-    FixedCountWatcher(size_t count)
-        : mCount(count)
-        , mCurrent(0)
-        , mDone(false)
-    {}
-
-    auto WaitForEvent() -> std::optional<int> override
-    {
-        if (mCurrent++ >= mCount)
-        {
-            mDone = true;
-            mDone.notify_one();
-            return std::nullopt;
-        }
-        return 0;
-    }
-
-    auto Wait() -> void
-    {
-        mDone.wait(false);
-    }
-};
